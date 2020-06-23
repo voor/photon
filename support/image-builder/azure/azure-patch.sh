@@ -4,15 +4,19 @@ cd /lib/systemd/system/multi-user.target.wants/
 
 # Create links in multi-user.target to auto-start these scripts and services.
 
-ln -s ../docker.service docker.service
+# Disable Docker support
+# ln -s ../docker.service docker.service
 ln -s ../waagent.service waagent.service
 ln -s ../sshd-keygen.service sshd-keygen.service
+
+swapoff -a
+rm -f /swapfile
 
 # Remove ssh host keys and add script to regenerate them at boot time.
 
 rm -f /etc/ssh/ssh_host_*
 
-sudo groupadd docker
+sudo groupadd builder
 sudo groupadd sudo
 
 rm /root/.ssh/authorized_keys
@@ -48,8 +52,23 @@ echo "Ciphers aes128-ctr,aes192-ctr,aes256-ctr,arcfour256,arcfour128,aes128-cbc,
 echo "Tunnel no" >> /etc/ssh/ssh_config
 echo "ServerAliveInterval 180" >> /etc/ssh/ssh_config
 
-sed -i 's/$photon_cmdline $systemd_cmdline/init=\/lib\/systemd\/systemd loglevel=3 ro console=tty1 console=ttyS0,115200n8 earlyprintk=ttyS0,115200 fsck.repair=yes rootdelay=300/' /boot/grub/grub.cfg
+# Make sure eth0 interface comes up properly
+cat > /etc/systemd/network/10-eth0.network.manual <<'_END'
+[Match]
+Name=eth0
+[Network]
+LinkLocalAddressing=no
+DHCP=ipv4
+[DHCP]
+UseDomains=true
+ClientIdentifier=mac
+_END
 
+chmod 0644 /etc/systemd/network/10-eth0.network.manual
+chown systemd-network:systemd-network /etc/systemd/network/10-eth0.network.manual
+
+# Include serial console output for Azure boot diagnostics and serial support
+sed -i 's/$photon_cmdline $systemd_cmdline/init=\/lib\/systemd\/systemd loglevel=3 ro console=tty1 console=ttyS0,115200n8 earlyprintk=ttyS0,115200 fsck.repair=yes rootdelay=300/' /boot/grub/grub.cfg
 
 # Remove kernel symbols
 rm /boot/system.map*
